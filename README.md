@@ -1,2 +1,2 @@
-# Dish_Recommender
+# Dish Recommender
 My dish recommendation app!
