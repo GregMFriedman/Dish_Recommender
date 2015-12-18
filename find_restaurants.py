@@ -39,7 +39,7 @@ config = cnfg.load(".yelp_config")
 OUTPUTDIR = 'output'
 
 DEFAULT_TERM = 'dinner'
-DEFAULT_LOCATION = 'West Village, NY'
+DEFAULT_LOCATION = '70 Battery Place, NY'
 DEFAULT_RADIUS = 10000
 
 term = DEFAULT_TERM
@@ -380,8 +380,8 @@ def get_vectors(df, ratings):
 
     vectors = {}
     for k in totals[1].keys():
-        vectors[k] = sum([totals[1][k],totals[2][k],totals[3][k],totals[4][k],totals[5][k]]), 
-                    totals[1][k],totals[2][k],totals[3][k],totals[4][k],totals[5][k]
+        vectors[k] = sum([totals[1][k],totals[2][k],totals[3][k],totals[4][k],totals[5][k]]), \
+        totals[1][k],totals[2][k],totals[3][k],totals[4][k],totals[5][k]
     return vectors
 
 
@@ -494,7 +494,7 @@ def word_match(words, menu, vector_dict, threshold=93, best_matches=None):
 
 def get_keyword_dict(matches):
 
-     """A mapping of menu items to keywords and number of reviews that keyword appeared in
+    """A mapping of menu items to keywords and number of reviews that keyword appeared in
      for debugging purposes
     Args: 
         best_matches (dict): dictionary of menu items, keywords and their vectors 
@@ -510,13 +510,14 @@ def get_keyword_dict(matches):
             row.insert(0, key)
             rows.append(row[:3])
     match_dict = defaultdict(list)
+    
     for row in rows:
         match_dict[row[0]].append(row[1:])
     return matches
 
 def get_scores(vector):
 
-    """Convert vectors to more relatable scores
+    """Convert vectors to more relatable scores.
     Args: 
         vector(tup): a 6-D tuple--a total review count and a review count for all 5 star ratings
     Returns:
@@ -536,13 +537,6 @@ def get_scores(vector):
 
 
 def rec_df(best_matches):
-
-     """Create DataFrame of aggregate scores for each menu item or fails
-    Args: 
-        best_matches (dict): dictionary of menu items, keywords and their vectors 
-    Returns:
-        rdf (DataFrame): a DataFrame whose rows are dishes and columns are scores
-    """
 
     rows = []
     for key, match_list in best_matches.iteritems():
@@ -565,11 +559,20 @@ def rec_df(best_matches):
 
 
 def add_keywords(df):
+
+    """Adds a column of keywords and counts for debugging purposes
+    Args: 
+        df (DataFrame): a DataFrame whose rows are dishes and columns are scores
+    Returns:
+        df (DataFrame): same df with added column of keywords and corresponding review counts
+    """
+
     df['Keywords'] = df['Dish'].apply(lambda x: match_dict[x])
     return df
 
 
 def main():
+
     try:
         with open('rec_dict.pkl', 'r') as picklefile:
             rec_dict = pickle.load(picklefile)
@@ -640,8 +643,10 @@ def main():
                 except:
                     print resto + " couldn't be added to rec_dict"
             else:
+                print resto + "'s menu had no good matches"
                 continue
         else:
+            print resto + ' already in rec_dict'
             continue
         
     with open('rec_dict.pkl', 'w') as picklefile:
