@@ -16,6 +16,7 @@ import requests
 from requests_oauthlib import OAuth1
 import cnfg
 import time
+from datetime import datetime
 from random import randint
 import os
 import inspect, os
@@ -99,22 +100,25 @@ def request(host, path, url_params=None):
 
 
 
-def get_business_ids(term, location, radius, maxlimit=20):
+def get_biz_ids(term, location, radius, maxlimit=20):
 
-    """Function to get the business_ids from the yelp API.
+    """Function to get the biz_ids from the yelp API.
     Args:
         term (str): The search term.
         location (str): The location to search for.
         radius (int): The radius (in meters) for the search.
         maxlimit (int): An optional set of query parameters in the request for maximim results returned. (Max is 20)
     Returns:
-        businesses (list): A list of all the business_ids for the search.
+        businesses (list): A list of all the biz_ids for the search.
     """
 
     offset = 0
     businesses = []
     resume = True
+    queries = 0;
     while resume:
+        if queries > 3:
+            break
         url_params = {
             'term': term.replace(' ', '+'),
             'location': location.replace(' ', '+'),
@@ -130,6 +134,7 @@ def get_business_ids(term, location, radius, maxlimit=20):
         for i in range(n_records):
             businesses.append(output['businesses'][i]['id']) 
         offset += n_records
+        queries += 1
     return businesses
 
 
@@ -154,49 +159,51 @@ def get_soup_from_url(url):
     return soup
 
 
-def get_business_url(business_id, base = 'http://www.yelp.com/biz/'):
+def get_business_url(biz_id, base = 'http://www.yelp.com/biz/'):
 
-    """Takes business_id and returns the url for a business.
+    """Takes biz_id and returns the url for a business.
     Args:
-        business_id (str): A unique business id for each Yelp business
+        biz_id (str): A unique business id for each Yelp business
     Returns:
         business_url (str): The url for the Yelp business.
     """ 
 
-    business_url = base + business_id
+    business_url = base + biz_id
     return business_url
 
 
-def get_number_reviews(business_id):
+def get_number_reviews(biz_id):
 
     """Gets the unique number of reviews for a business.
     Args:
-        business_id (str): A unique business id for each Yelp business
+        biz_id (str): A unique business id for each Yelp business
     Returns:
         number_reviews (int): The unique number of reviews for a business.
     """ 
 
-    url = get_business_url(business_id)
+    url = get_business_url(biz_id)
     soup = get_soup_from_url(url)
     number_reviews = int(soup.find(itemprop = 'reviewCount').text)
     return number_reviews
 
 
-def get_all_reviews_for_business(business_id, max_limit = 20):
+def get_all_reviews_for_business(biz_id, max_limit = 20):
 
     """Gets all of customer reviews for a business.
     Args:
-        business_id (str): A unique business id for each Yelp business
+        biz_id (str): A unique business id for each Yelp business
     Returns:
         reviews (list): All the reviews for a given business.
     """ 
 
     reviews = []
     counter = 0
-    url = get_business_url(business_id)
+    url = get_business_url(biz_id)
     new_url = url
-    num_reviews = get_number_reviews(business_id)
-    print num_reviews
+    num_reviews = get_number_reviews(biz_id)
+    print biz_id, num_reviews
+    if num_reviews > 500:
+        num_reviews = 500
     
     while counter <= num_reviews:
         soup = get_soup_from_url(new_url)
@@ -208,20 +215,22 @@ def get_all_reviews_for_business(business_id, max_limit = 20):
     return reviews
 
 
-def get_all_scores_for_business(business_id, max_limit = 20):
+def get_all_scores_for_business(biz_id, max_limit = 20):
 
     """Gets all of customer review scores for a business.
     Args:
-        business_id (str): A unique business id for each Yelp business
+        biz_id (str): A unique business id for each Yelp business
     Returns:
         scores (list): All the review scores for a given business.
     """ 
 
     scores = []
     counter = 0
-    url = get_business_url(business_id)
+    url = get_business_url(biz_id)
     new_url = url
-    num_reviews = get_number_reviews(business_id)
+    num_reviews = get_number_reviews(biz_id)
+    if num_reviews > 500:
+        num_reviews = 500
     
     while counter <= num_reviews:
         soup = get_soup_from_url(new_url)
@@ -237,23 +246,23 @@ def get_all_scores_for_business(business_id, max_limit = 20):
     return scores
 
 
-def create_business_dictionary(business_id, outputdir):
+def create_business_dictionary(biz_id, outputdir):
 
     """Creates a dictionary for a business with the keys: 'name', 'reviews', 'scores'.
     Args:
-        business_id (str): A unique business id for each Yelp business
+        biz_id (str): A unique business id for each Yelp business
         outputdir (str): A specified path for where the output should be created
     Returns:
         d (dict): A dictionary for a given business
     """ 
 
-    print ("Processing {0} dictionary...").format(business_id)
+    print ("Processing {0} dictionary...").format(biz_id)
     d = {}
-    d['name'] = business_id
-    d['reviews'] = get_all_reviews_for_business(business_id)
-    d['scores'] = get_all_scores_for_business(business_id)
+    d['name'] = biz_id
+    d['reviews'] = get_all_reviews_for_business(biz_id)
+    d['scores'] = get_all_scores_for_business(biz_id)
     create_dir(outputdir)
-    output_path = os.path.join(outputdir, '{0}.p'.format(business_id))
+    output_path = os.path.join(outputdir, '{0}.p'.format(biz_id))
     pickle.dump(d, open('{}'.format(output_path), 'wb'))
     print (">>> Output saved to {0}").format(output_path)   
 
@@ -294,6 +303,8 @@ def screlpy(biz_id):
                 foods = section.find_all('h4')
                 for food in foods:
                     food_list.append(food.text.strip())
+                if len(food_list) == 0:
+                    food_list = [section]
                 options.append(food_list)
 
         menu = dict(zip(course_list, options))
@@ -327,7 +338,9 @@ def get_menus(biz_ids, menus=None):
             menus[biz_id] = screlpy(biz_id)
             print 'screlped ' + biz_id
         else:
-            print biz_id + ' Menu not on Yelp'
+            print biz_id + "'s Menu already scraped"
+    else:
+        print biz_id + ' Menu not on Yelp'
     return menus
 
 
@@ -447,7 +460,15 @@ def best_matches(bigkeys, menu, vector_dict, threshold=90):
     for key, course in menu.iteritems():
         for food in course:
             item = food.replace('-', ' ')
-            if len(item.split()) > 1:
+            if len(item.split()) > 1 and len(item.split()) < 4:
+                matches = process.extractBests(item, bigkeys, scorer=fuzz.QRatio, score_cutoff=threshold, limit=3)
+                matches += process.extractBests(item, bigkeys, scorer=fuzz.UWRatio, score_cutoff=threshold, limit=3)
+                vectors = []
+                for match in matches:
+                    vectors.append(vector_dict[match[0]])
+                best_matches[item] = dict(zip(matches, vectors))
+            if len(item.split()) > 3:
+                descriptor = item.split()[-2:]
                 matches = process.extractBests(item, bigkeys, scorer=fuzz.QRatio, score_cutoff=threshold, limit=3)
                 matches += process.extractBests(item, bigkeys, scorer=fuzz.UWRatio, score_cutoff=threshold, limit=3)
                 vectors = []
@@ -476,15 +497,11 @@ def word_match(words, menu, vector_dict, threshold=93, best_matches=None):
     for key, value in menu.iteritems():
         for food in value:
             item = food.replace('-', '')
+            item = item.replace(u'\xe9', 'e')
+            item = item.replace(u'\xea', 'e')
+            item = item.replace(u'\xe0', 'a')
             if len(item.split()) == 1:
                 matches = process.extractBests(item, words, scorer=fuzz.QRatio, score_cutoff=threshold, limit=3)
-                vectors = []
-                for match in matches:
-                    vectors.append(vector_dict[match[0]])
-                best_matches[item] = dict(zip(matches, vectors))
-            if len(item.split()) > 3:
-                descriptor = item.split()[-1]
-                matches = process.extractBests(descriptor, words, scorer=fuzz.QRatio, score_cutoff=threshold, limit=3)
                 vectors = []
                 for match in matches:
                     vectors.append(vector_dict[match[0]])
@@ -527,16 +544,25 @@ def get_scores(vector):
         polarity (float): a score indicating higher variance among reviews
     """
 
-    score = np.round((2*vector[5] + vector[4] - vector[2] - 2*vector[1]) / vector[0], 2)
-    weighted = np.round((2*vector[5] + vector[4] - vector[2] - 2*vector[1]),2)
-    polarity = np.round(np.var(vector[5]*[5] + vector[4]*[4] + vector[3]*[3] + vector[2]*[2] + vector[1]*[1]),2)
+    score = np.round( sum([i*vector[i] for i in range(1,6)]) / vector[0], 2)
+    # weighted = np.round((2*vector[5] + vector[4] - vector[2] - 2*vector[1]),2)
+    # polarity = np.round(np.var(vector[5]*[5] + vector[4]*[4] + vector[3]*[3] + vector[2]*[2] + vector[1]*[1]),2)
     buzz = vector[0]
     
     
-    return buzz, weighted, score, polarity
+    # return buzz, weighted, score, polarity
+    return buzz, score
 
 
 def rec_df(best_matches):
+
+    """Create DataFrame of aggregate scores for each menu item or an empty list if 
+     no matches are found for the menu items.
+    Args: 
+        best_matches (dict): dictionary of menu items, keywords and their vectors 
+    Returns:
+        rdf (DataFrame): a DataFrame whose rows are dishes and columns are scores
+    """
 
     rows = []
     for key, match_list in best_matches.iteritems():
@@ -546,10 +572,13 @@ def rec_df(best_matches):
             rows.append(row)
     rec_df = pd.DataFrame(rows)
     try:
-        rec_df.rename(columns={0:'Dish', 1: 'Keyword', 2: 'Match_Score', 3: 'Tot_Reviews', 4: 'Trendiness', 5:'Score', 6:'Controversy'}, inplace=True)
-        rec_df['Score'] = rec_df['Score'].apply(lambda x: (x+2)*1.25)
-        rdf = rec_df.drop(['Trendiness', 'Controversy'],axis=1).pivot_table(index='Dish',  aggfunc={'Tot_Reviews':sum, 
-                                                                      'Score': np.mean, 'Match_Score': np.mean})
+        #rec_df.rename(columns={0:'Dish', 1: 'Keyword', 2: 'Match_Score', 3: 'Tot_Reviews', 4: 'Trendiness', 5:'Score', 6:'Controversy'}, inplace=True)
+        rec_df.rename(columns={0:'Dish', 1: 'Keyword', 2: 'Match_Score', 3: 'Tot_Reviews', 4: 'Score'}, inplace=True)
+
+        # rec_df['Score'] = rec_df['Score'].apply(lambda x: (x+2)*1.25)
+        # rdf = rec_df.drop(['Trendiness', 'Controversy'],axis=1).pivot_table(index='Dish',  aggfunc={'Tot_Reviews':sum, 
+        #                                                               'Score': np.mean, 'Match_Score': np.mean})
+        rdf = rec_df.pivot_table(index='Dish',  aggfunc={'Tot_Reviews':sum, 'Score': np.mean, 'Match_Score': np.mean})
         rdf['Match_Score'] = np.round(rdf['Match_Score'],1)
         rdf['Score'] = np.round(rdf['Score'],2)
         rdf.reset_index(inplace=True)
@@ -569,6 +598,78 @@ def add_keywords(df):
 
     df['Keywords'] = df['Dish'].apply(lambda x: match_dict[x])
     return df
+
+
+def get_stats(biz_id, menus=None, stats=None):
+
+    """Creates a dictionary of relevant info for a given restaurant
+    Args: 
+        biz_id(str): unique identifier of each restaurant 
+    Returns:
+        stats(dict): a dictionary containing category, coordinates, city, neighborhood, rating,
+        image_url, review_count, the restaurant's menu if on Yelp and the last time that menu was updated
+    """
+
+
+    business_path = BUSINESS_PATH + biz_id
+    info = request(API_HOST, business_path)
+    if not menus:
+        menus = {}
+    if not stats:
+        stats = {}
+        stats['category'] = info['categories'][0]
+        stats['long'] = info['location']['coordinate']['longitude']
+        stats['lat'] = info['location']['coordinate']['latitude']
+        stats['city'] = info['location']['city']
+        stats['neighborhood'] = info['location']['neighborhoods'][0]
+        stats['image_url'] = info['image_url']
+        stats['name'] = info['name']
+        stats['rating'] = info['rating']
+        stats['id'] = info['id']
+        stats['review_count'] = info['review_count']
+        if 'menu_date_updated' in info.keys():
+            stats['menu_update'] = datetime.fromtimestamp(int(info['menu_date_updated'])).strftime('%Y-%m-%d')
+        if biz_id in menus:
+            stats['menu'] = menus[biz_id]
+        else:
+            stats['menu'] = screlpy(biz_id) 
+    else:
+        stats = stats
+    return stats
+
+
+
+def get_stats_dict(biz_ids, stats_dict=None):
+
+       """Creates information dictionaries by restaurant IDs from a list of restuaraunts IDs
+    Args: 
+        biz_ids(str): list of unique restaurant identifiers
+    Returns:
+        stats_dict(dict): dictionary of info dictionaries whose keys are restaurant names
+    """
+
+    if not stats_dict:
+        stats_dict = {}
+    for biz_id in biz_ids:
+        stats_dict[biz_id] = get_stats(biz_id)
+    return stats_dict
+
+
+def get_neighborhoods(stats_dict):
+
+
+    """Finds all unique neighborhoods in a dictionary of restaurant stats
+    Args: 
+        stats_dict(dict): dictionary of info dictionaries whose keys are restaurant names
+    Returns:
+        neighborhoods(list): list of unique neighborhoods in stats_dict
+    """
+
+    neighborhoods = []
+    for resto, stats in stats_dict.iteritems():
+        if stats['neighborhood'] not in neighborhoods:
+            neighborhoods.append(stats['neighborhood'])
+    return neighborhoods
 
 
 def main():
@@ -591,29 +692,32 @@ def main():
 
     location = location.replace(" ","")
     print ("Getting your restaurant reviews...")
-    business_ids = get_business_ids(term, location, radius)
+    biz_ids = get_biz_ids(term, location, radius)
 
     try:
-        with open(location+'_menus.pkl', 'r') as picklefile:
+        with open('all_menus.pkl', 'r') as picklefile:
             menus = pickle.load(picklefile)
-        menus = get_menus(business_ids, menus)
+        menus = get_menus(biz_ids, menus)
 
     except:
-        menus = get_menus(business_ids)
+        menus = get_menus(biz_ids)
     
-    with open(location+'_menus.pkl', 'w') as picklefile:
+    with open('all_menus.pkl', 'w') as picklefile:
         pickle.dump(menus, picklefile)
     print ('Menus scraped')
 
-    folder = ('_').join(location.replace(",", ' ').split())
-    sub_folder = ('_').join(term.split())
-    create_dir(folder+'/'+sub_folder)
+    # folder = ('_').join(location.replace(",", ' ').split())
+    # sub_folder = ('_').join(term.split())
+    # create_dir(folder+'/'+sub_folder)
+
+    folder = 'all_recs'
+    create_dir(folder)
 
     for resto, menu in menus.iteritems():
+        if resto in biz_ids:
 
-        start_time = time.time()
+            start_time = time.time()
 
-        if resto not in rec_dict:
         
             vectors = vectorize_restaurant(resto)
             print(resto + ' vectorized')
@@ -639,7 +743,7 @@ def main():
 
 
                 try:
-                    rec_dict[resto] = rdf
+                    rec_dict[resto] = rdf.T.to_dict()
                 except:
                     print resto + " couldn't be added to rec_dict"
             else:
