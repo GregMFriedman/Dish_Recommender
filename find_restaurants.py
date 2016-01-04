@@ -148,7 +148,8 @@ def get_biz_ids(term, location, radius, maxlimit=20):
             businesses.append(output['businesses'][i]['id']) 
         offset += n_records
         queries += 1
-    return businesses
+    bizzes = map(lambda x: remove_accents(x), businesses)
+    return bizzes
 
 
 
@@ -615,7 +616,7 @@ def add_keywords(df):
     return df
 
 
-def add_course_details(rdf, menus, biz_id):
+def add_course_details(rdf, menu, biz_id):
 
     """Adds the meal and course for each dish in the reccomendation dictionary.
     Args:
@@ -627,7 +628,7 @@ def add_course_details(rdf, menus, biz_id):
 
     
     rec = rdf.T.to_dict()
-    menu = menus[biz_id]
+    #menu = menus[biz_id]
     for number, item in rec.iteritems():
         if number != '_id':
             dish = item['Dish']
@@ -639,70 +640,75 @@ def add_course_details(rdf, menus, biz_id):
     return rec
 
 
+def get_rec(biz_id, menus=None, rec_dict=None, folder='all_recs'):
 
-def get_rec_dict(biz_ids, menus):
+    """ Encapsulates the full recommendation process from biz_id to dish reccomendation for that biz_id
+    Args:
+        biz_id (str): unique identifier for restaurant
+        menus (dict): dict of scraped menus
+        rec_dict (dict): dictionary of existing recommendations to avoid redundancies
+        folder (str): path to the folder storing the recommendations 
+    Returns:
+        rec (dict): A dictionary of dishes and scores for a given biz_id
+    """
+    
+    start_time = time.time()
+    if biz_id in rec_dict:
+        return rec_dict[biz_id]
+    if biz_id in menus:
+        menu = menus[biz_id]
+    else:
+        menu = screlpy(biz_id)
+        if menus:
+            menus[biz_id] = menu
+            print biz_id + ' added to menus'
+            
+    #grab up to 500 reviews for a restaurant and return ratings vectors for each n-gram (n from 1-3)
+    vectors = vectorize_restaurant(biz_id)
+    print(biz_id + ' vectorized')
+
+
+    #filter down to ngrams that appear multiple times throughout all reviews for that restaurant
+
+    littlekeys, bigkeys = filter_keys(vectors)
+
+
+    #find ngrams that are close matches with items on that restaurant's menu
+
+    matches = best_matches(bigkeys, menu, vectors)
+    word_matches = word_match(littlekeys, menu, vectors, best_matches=matches)
+
+    #return a pandas DataFrame of menu items and their scores
+
+    rdf = rec_df(word_matches)
+
+    if (len(rdf) > 1):
+        print biz_id + ' ' + str(len(rdf))
+
+        create_dir(folder)
+
+        rec = add_course_details(rdf, menu, biz_id)
+
+        print ("--- %s seconds ---") % (time.time() - start_time)
+
+        with open(folder + '/' + biz_id + '_recs.json', 'w') as fp:
+            json.dump(rec, fp)
+
+        return rec
+
+    else:
+        return []
+
+
+def get_rec_dict(biz_ids, menus=None, rec_dict=None):
+
+
 
     for biz_id in biz_ids:
         
-        if biz_id in menus:
-            menu = menus[biz_id]
-        else:
-            continue
+        rec = get_rec(biz_id, menus=menus, rec_dict=rec_dict)
+        rec_dict[biz_id] = rec
             
-        folder = 'all_recs'
-        create_dir(folder)
-        
-        start_time = time.time()
-
-        
-        #grab up to 500 reviews for a restaurant and return ratings vectors for each n-gram (n from 1-3)
-        
-        vectors = vectorize_restaurant(biz_id)
-        print(biz_id + ' vectorized')
-
-        
-        #filter down to ngrams that appear multiple times throughout all reviews for that restaurant
-        
-        littlekeys, bigkeys = filter_keys(vectors)
-
-        
-        #find ngrams that are close matches with items on that restaurant's menu
-        
-        matches = best_matches(bigkeys, menu, vectors)
-        word_matches = word_match(littlekeys, menu, vectors, best_matches=matches)
-
-        #return a pandas DataFrame of menu items and their scores
-        
-        rdf = rec_df(word_matches)
-        
-        if len(rdf) > 1:
-
-            print(rdf.keys())
-
-            rec = add_course_details(rdf, menus, biz_id)
-
-            with open(folder + '/' + biz_id + '_recs.json', 'w') as fp:
-                json.dump(rec, fp)
-
-            print biz_id + ' dish scores saved'
-
-            print ("--- %s seconds ---") % (time.time() - start_time)
-
-            print biz_id
-            print rdf.columns
-
-
-            try:
-
-                rec_dict[biz_id] = rec
-            except:
-                print biz_id + " couldn't be added to rec_dict"
-        else:
-            print biz_id + "'s menu had no good matches"
-            continue
-    else:
-        print biz_id + ' already in rec_dict'
-
     with open('rec_dict.pkl', 'w') as picklefile:
         pickle.dump(rec_dict, picklefile)
 
@@ -782,6 +788,73 @@ def get_neighborhoods(stats_dict):
     return neighborhoods
 
 
+def get_dish_descriptions(soup):
+
+
+
+
+
+
+    meal = soup.find(class_='breadcrumbs').find('span').text.strip()
+    main = soup.find(class_='menu-sections')
+    menu = {}
+    course_list = []
+    options = []
+    for items in main:
+        courses = main.find_all(class_="menu-section-header")
+        for course in courses:
+            item = remove_accents(course.find('h2').text.strip())
+            item = item.replace('.', '')
+            course_list.append(item)
+        sections = main.find_all(class_='menu-section')
+        for section in sections:
+            food_list = []
+            foods = section.find_all(class_='menu-item-details')
+            for food in foods:
+                dish = [remove_accents(food.h4.text).strip()]
+                if food.find(class_="menu-item-details-description"):
+                    ingredients = food.p.text.split(',')
+                    ingredients = map(lambda x: remove_accents(x), ingredients)
+                    #print dish, ingredients
+                    dish += ingredients
+                food_list.append(dish)
+            options.append(food_list)
+        menu = dict(zip(course_list, options))
+    return meal, menu
+
+def screlpy_descriptions(biz_id):
+
+    """Creates a dictionary of the restaurant's menu with courses as keys and
+     lists of dishes and their descriptions for each course as the value: 
+    Args:
+        biz_id (str): The unique business id for each restaurant
+    Returns:
+        menu (dict): A menu dictionary for the given restaurant
+    """ 
+    menus = {}
+    url = get_business_url(biz_id)
+    soup = get_soup_from_url(url)
+    explore = soup.find(class_= 'menu-explore')
+    if explore:
+        url = 'http://www.yelp.com' + explore['href']
+        soup = get_soup_from_url(url)
+        meal, meal_menu = get_dish_descriptions(soup)
+        menus[meal] = meal_menu
+        other_menus = soup.find(class_="sub-menus")
+        if other_menus:
+            other_menus = other_menus.find_all('li')
+            for other_menu in other_menus:
+                if other_menu.a and 'Wine' not in other_menu.a.text:
+                    other_url = 'http://www.yelp.com' + other_menu.a['href']
+                    other_soup = get_soup_from_url(other_url)
+                    meal, meal_menu = get_dish_descriptions(other_soup)
+                    menus[meal] = meal_menu
+        print biz_id + ' descriptions screlped'
+        return menus    
+    else:
+        return False
+
+
 def main():
 
     try:
@@ -819,10 +892,8 @@ def main():
     # sub_folder = ('_').join(term.split())
     # create_dir(folder+'/'+sub_folder)
 
-    folder = 'all_recs'
-    create_dir(folder)
-
-    get_rec_dict(biz_ids, menus)
+    biz_ids = filter(lambda(x): x in menus, biz_ids)
+    get_rec_dict(biz_ids, menus=menus, rec_dict=rec_dict)
 
 if __name__ == '__main__':
     main()
