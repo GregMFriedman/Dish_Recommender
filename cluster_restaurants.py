@@ -64,14 +64,50 @@ TOKEN = config['token']
 TOKEN_SECRET = config['token_secret']
 
 
+NUM_CLUSTERS = 15
+
+DRINK_MENUS = [u'Bar Menu',
+ u'Beer',
+ u'Beer Menu',
+ u'Beers',
+ u'Beverage Menu',
+ u'Beverages Menu',
+ u'Brunch Menu',
+ u'Cocktail Menu',
+ u'Cocktails',
+ u'Cocktails & Drinks',
+ u'Cocktails and Drinks',
+ u'Cull & Pistol Happy Hour Menu',
+ u'Dessert',
+ u'Dessert Menu',
+ u'Dinner Menu',
+ u'Drink Menu',
+ u'Drinks',
+ u'Drinks Menu',
+ u'Happy Hour',
+ u'Libations Menu',
+ u'Other Drink Offerings',
+ u'Treats Menu',
+ u'Vino/Cocktails',
+ u'Wine Menu']
+
+
 def remove_accents(input_str):
 
+	"""Cleans unicode strings with foreign characters and returns the English equivalent.
+    Args:
+        input_str (str): Any string, unicode or not
+    Returns:
+        output_str (str): Cleaned string if necessary, otherwise original string
+    """ 
 
-    if type(input_str) == unicode:
-        nfkd_form = unicodedata.normalize('NFKD', input_str)
-        return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    else:
-        return input_str
+	if type(input_str) == unicode:
+	    nfkd_form = unicodedata.normalize('NFKD', input_str)
+	    output_str = u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
+	    return output_str
+	else:
+	    output_str = input_str
+	    return output_str
 
 
 
@@ -267,7 +303,6 @@ def get_stats(biz_id, menus=None, stats=None):
         image_url, review_count, the restaurant's menu if on Yelp and the last time that menu was updated
     """
 
-
     business_path = BUSINESS_PATH + biz_id
     info = request(API_HOST, business_path)
     if not menus:
@@ -294,45 +329,63 @@ def get_stats(biz_id, menus=None, stats=None):
         stats = stats
     return stats
 
+
+def get_stats_dict(biz_ids, stats_dict=None):
+
+    """Creates information dictionaries by restaurant IDs from a list of restuaraunts IDs
+    Args: 
+        biz_ids(str): list of unique restaurant identifiers
+    Returns:
+        stats_dict(dict): dictionary of info dictionaries whose keys are restaurant names
+    """
+
+    if not stats_dict:
+        stats_dict = {}
+    for biz_id in biz_ids:
+        stats_dict[biz_id] = get_stats(biz_id)
+    return stats_dict
+
+
 def get_dish_descriptions(soup):
 
 	"""Creates a nested dictionary of the menu for each meal with courses as outer
 	keys, dish names as inner keys and descriptions of those dishes as the values.
 	If there is no description available, the value defaults to the name of the dish. 
-    Args:
-        soup (BeautifulSoup soup): Scraped site of the menu webpage
-    Returns:
-        meal (str): Name of the meal 
-        menu (dict): A description dictionary for the menu of the given meal
-    """ 
+	Args:
+	    soup (BeautifulSoup soup): Scraped site of the menu webpage
+	Returns:
+	    meal (str): Name of the meal 
+	    menu (dict): A description dictionary for the menu of the given meal
+	""" 
+
+	meal = soup.find(class_='breadcrumbs').find('span').text.strip()
+	main = soup.find(class_='menu-sections')
+	menu = {}
+	course_list = []
+	options = []
+	for items in main:
+	    courses = main.find_all(class_="menu-section-header")
+	    for course in courses:
+	        item = remove_accents(course.find('h2').text.strip())
+	        item = item.replace('.', '')
+	        course_list.append(item)
+	    sections = main.find_all(class_='menu-section')
+	    for section in sections:
+	        food_list = []
+	        foods = section.find_all(class_='menu-item-details')
+	        for food in foods:
+	            dish = [remove_accents(food.h4.text).strip()]
+	            if food.find(class_="menu-item-details-description"):
+	                ingredients = food.p.text.split(',')
+	                ingredients = map(lambda x: remove_accents(x), ingredients)
+	                #print dish, ingredients
+	                dish += ingredients
+	            food_list.append(dish)
+	        options.append(food_list)
+	    menu = dict(zip(course_list, options))
+	return meal, menu
 
 
-    meal = soup.find(class_='breadcrumbs').find('span').text.strip()
-    main = soup.find(class_='menu-sections')
-    menu = {}
-    course_list = []
-    options = []
-    for items in main:
-        courses = main.find_all(class_="menu-section-header")
-        for course in courses:
-            item = remove_accents(course.find('h2').text.strip())
-            item = item.replace('.', '')
-            course_list.append(item)
-        sections = main.find_all(class_='menu-section')
-        for section in sections:
-            food_list = []
-            foods = section.find_all(class_='menu-item-details')
-            for food in foods:
-                dish = [remove_accents(food.h4.text).strip()]
-                if food.find(class_="menu-item-details-description"):
-                    ingredients = food.p.text.split(',')
-                    ingredients = map(lambda x: remove_accents(x), ingredients)
-                    #print dish, ingredients
-                    dish += ingredients
-                food_list.append(dish)
-            options.append(food_list)
-        menu = dict(zip(course_list, options))
-    return meal, menu
 
 def screlpy_descriptions(biz_id):
 
@@ -366,28 +419,199 @@ def screlpy_descriptions(biz_id):
     else:
         return False
 
+
+
 def create_menu_strings(description_dict):
 
-	"""Converts a dictionary of menu descriptions into strings for clustering 
-    Args:
-        description_dict (dict): dictionary of menu descriptions
-    Returns:
-        menu_list (list): A list of mini-dictionaries with keys of biz_id
-        and dishes, whose values are both strings.
-    """ 
+	"""Converts a dictionary of menu descriptions into strings for clustering
+	entire restaurants (and all their menus) 
+	Args:
+	    description_dict (dict): dictionary of menu descriptions
+	Returns:
+	    menu_list (list): A list of mini-dictionaries with keys of biz_id
+	    and dishes, whose values are both strings.  
+	""" 
 
-    menu_list = []
-    for biz_id, menu in description_dict.iteritems():
-        temp = {}
-        dish_string = ''
-        for meal, courses in menu.iteritems():
-            if meal not in drink_menus:
-                for course, foods in courses.iteritems():
-                    for food in foods:
-                        for word in food:
-                            dish_string += ' ' + word.strip()
-        if dish_string:
-            temp['biz_id'] = biz_id
-            temp['dishes'] = dish_string
-            menu_list.append(temp)
-    return menu_list
+	menu_list = []
+	for biz_id, menu in description_dict.iteritems():
+	    temp = {}
+	    dish_string = ''
+	    for meal, courses in menu.iteritems():
+	        if meal not in DRINK_MENUS:
+	            for course, foods in courses.iteritems():
+	                for food in foods:
+	                    for word in food:
+	                        dish_string += ' ' + word.strip()
+	    if dish_string:
+	        temp['biz_id'] = biz_id
+	        temp['dishes'] = dish_string
+	        menu_list.append(temp)
+
+	return menu_list
+
+
+
+def create_meal_strings(description_dict):
+
+	"""Converts a dictionary of menu descriptions into strings for clustering
+	by each menu (rather than each restaurant)
+	Args:
+	    description_dict (dict): dictionary of menu descriptions
+	Returns:
+	    meal_list (list): A list of mini-dictionaries with keys of biz_id
+	    and dishes and meal, all of whose values are strings.  
+	""" 
+
+	meal_list = []
+	for biz_id, menu in description_dict.iteritems():
+	    for meal, courses in menu.iteritems():
+	        temp = {}
+	        dish_string = ''
+	        for course, foods in courses.iteritems():
+	            for food in foods:
+	                for word in food:
+	                    dish_string += ' ' + word.strip()
+	        temp['meal'] = meal
+	        temp['biz_id'] = biz_id
+	        temp['dishes'] = dish_string
+	        meal_list.append(temp)
+	return meal_list
+
+
+
+
+def cluster_restaurants(menu_list, num_clusters=NUM_CLUSTERS):
+    
+    """Takes a list of dish descriptions for a given restaurant or menu and
+    clusters them.
+    Args:
+        menu_list (list): a list whose elements are dictionaries of biz_ids and dish 
+        descriptions for one restaurant menu or an aggregation of all the menus 
+        for one restaurant.
+        NUM_CLUSTERS (int): number of clusters 
+    Returns:
+    	km (sklearn Kmeans clustering object): only returned for convenience in later
+    	functions
+    	vectorizer(TfidfVectorizer): also returned for convenience
+        clusters (Numpy Array): an array whose indexes correspond to each description in
+        dish_list and whose values are the cluster that description was assigned to.
+
+    """ 
+    #setup the dish vectors
+    dish_list = []
+    for dish in menu_list:
+    	dish_list.append(dish['dishes'])
+    vectorizer = TfidfVectorizer(stop_words = "english", ngram_range=(1,2))
+    matrix = vectorizer.fit_transform(dish_list)
+    word_array = matrix.toarray()
+    df = pd.DataFrame(word_array, columns = vectorizer.get_feature_names())
+    
+    # run Kmeans Clustering
+    km = KMeans(n_clusters=num_clusters, init = 'k-means++', max_iter = 100, n_init = 1)
+    scale(df,with_mean=False)
+    clusters = km.fit_predict(df)
+    return vectorizer, km, clusters
+
+
+
+
+def get_keyword_dict(vectorizer, km, num_clusters=NUM_CLUSTERS):
+    
+    """Creates a dictionary of lists of most common words by cluster to
+    get a better idea of what clustered restaurant menus have in common.
+    Args:
+        vectorizer(TfidfVectorizer): in order to get the keywords
+        km (sklearn Kmeans clustering object): in order to 'locate' cluster
+        centers 
+        NUM_CLUSTERS (int): number of clusters 
+    Returns:
+        keyword_dict(dict): a dictionary of most common words by cluster.
+    """ 
+    
+    keyword_dict = {}
+    terms = vectorizer.get_feature_names()
+    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+    for i in range(num_clusters):
+        keywords = []
+        for ind in order_centroids[i, :50]:
+            keywords.append(terms[ind])
+        keyword_dict[i] = keywords
+
+    return keyword_dict
+
+
+
+
+def add_cluster_info(menu_list, clusters, keyword_dict, info_dict=None):
+
+	"""Adds the meal and course for each dish in the reccomendation dictionary.
+	Args:
+	    menu_list (list): a list whose elements are dictionaries of biz_ids and dish 
+	    clusters (Numpy Array): an array whose indexes correspond to each description in
+	    dish_list and whose values are the cluster that description was assigned to.
+	    keyword_dict(dict): a dictionary of most common words by cluster.
+	Returns:
+	    clustered_menus (dict): A augmented dictionary of recommendations
+	"""
+
+	clustered_menus = {}
+
+	for i in range(len(clusters)):
+	    
+	    menu_list[i]['cluster'] = clusters[i]
+	    menu_list[i]['cluster_words'] = keyword_dict[clusters[i]]
+	    biz_id = menu_list[i]['biz_id']
+	    clustered_menus[biz_id] = menu_list[i]
+	    
+	    if info_dict:
+	    	if biz_id in info_dict:
+		    	info_dict[biz_id]['cluster'] = clustered_menus[biz_id]['cluster']
+		    	info_dict[biz_id]['cluster_words'] = clustered_menus[biz_id]['cluster_words']
+
+	if info_dict:
+		with open('info_dict_test.pkl', 'w') as picklefile:
+			pickle.dump(info_dict, picklefile)
+
+	else:
+		with open('clustered_menus.pkl', 'w') as picklefile:
+			pickle.dump(clustered_menus, picklefile)
+
+
+def main():
+
+	try:
+		with open('info_dict.pkl', 'r') as picklefile:
+			info_dict = pickle.load(picklefile)
+
+	except:
+
+		biz_ids = get_biz_ids(term=DEFAULT_TERM, location=DEFAULT_LOCATION, radius=DEFAULT_RADIUS)
+		info_dict = get_stats_dict(biz_ids)
+
+	try:
+		with open('menu_descriptions.pkl', 'r') as picklefile:
+			descriptions = pickle.load(picklefile)
+ 	except:
+ 		descriptions = {}
+ 		biz_ids = info_dict.keys()
+ 		for biz_id in biz_ids:
+ 			descriptions[biz_id] = screlpy_descriptions(biz_id)
+
+ 	
+ 	start_time = time.time()
+
+ 	menu_list = create_menu_strings(descriptions)
+
+ 	vectorizer, km, clusters = cluster_restaurants(menu_list)
+
+ 	keyword_dict = get_keyword_dict(vectorizer, km)
+
+ 	add_cluster_info(menu_list, clusters, keyword_dict, info_dict=info_dict)
+
+ 	print 'Clusters Created!'
+
+ 	print ("--- %s seconds ---") % (time.time() - start_time)
+
+
+if __name__ == '__main__':
+    main()
