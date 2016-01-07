@@ -7,11 +7,12 @@
     <style type="text/css">
 
 html, body, #map {
-  width: 100%;
-  height: 100%;
+  width: 95%;
+  height: 95%;
   margin: 0;
   padding: 0;
 }
+
 
 .stations, .stations svg {
   position: absolute;
@@ -37,19 +38,33 @@ html, body, #map {
     height: 60px;         
     padding: 2px;       
     font: 12px sans-serif;    
-    background: lightsteelblue; 
     border: 0px;    
-    border-radius: 8px;     
+    border-radius: 8px; 
     
   }
+.tooltip {
+  position: absolute;     
+  text-align: center;  
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 4px;
+}
 
     </style>
   </head>
   <body>
     <div id="map"></div>
+    <div id='keywords'></div>
 
     <script type="text/javascript">
 
+
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+      width = 960 - margin.left - margin.right,
+      height = 500 - margin.top - margin.bottom;
 
 var cValue = function(d) { return d.value.cluster;},
         color = d3.scale.category20();
@@ -67,8 +82,9 @@ d3.json("json", function(json) {
 
   // Add the container when the overlay is added to the map.
   overlay.onAdd = function() {
-    var layer = d3.select(this.getPanes().overlayLayer).append("div")
-        .attr("class", "stations");
+    //var layer = d3.select(this.getPanes().overlayLayer).append("div")
+        // .attr("class", "stations");
+    var layer = d3.select(this.getPanes().overlayMouseTarget).append("div") .attr("class", "stations");
 
     // Draw each marker as a separate SVG element.
     // We could use a single SVG, but what size would it have?
@@ -77,6 +93,10 @@ d3.json("json", function(json) {
           padding = 10;
 
 
+      var tooltip = d3.selectAll(".stations").append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
       var marker = layer.selectAll("svg")
           .data(d3.entries(data))
           .each(transform) // update existing markers
@@ -84,8 +104,6 @@ d3.json("json", function(json) {
           .each(transform)
           .attr("class", "marker");
       
-      marker.append("svg:a")
-      .attr("xlink:href", function(d) { return '/foodmap/json/' + d.value.id});
 
       // Add a circle.
       marker.append("svg:circle")
@@ -93,7 +111,7 @@ d3.json("json", function(json) {
           .attr("r", function(d) { return Math.pow(d.value.rating - 2, 2); })
           .attr("cx", padding)
           .attr("cy", padding)
-          .on("click",expandNode)
+          
 
           .style("fill", function(d) { return color(cValue(d));})
 
@@ -101,30 +119,77 @@ d3.json("json", function(json) {
             tooltip.transition()    
                 .duration(200)    
                 .style("opacity", .9);    
-            tooltip.html(d.value.name + "<br/>"  + d.value.category)  
+            tooltip.html(d.value.name + "<br/>" +
+              '<a href= "/foodmap/'+d.value.id +'">'+'Best Dishes'+ "</a>" 
+              + "<br/>" +
+             d.value.category[0])  
                 .style("left", (d3.event.pageX) + "px")   
                 .style("top", (d3.event.pageY ) + "px");  
-            })          
-      .on("mouseout", function(d) {   
-            tooltip.transition()    
-                .duration(500)    
-                .style("opacity", 0); 
-        });
+            });         
+        //   .on("mouseout", function(d) {   
+        //     tooltip.transition()    
+        //         .duration(500)    
+        //         .style("opacity", 0); 
+        // });
 
+      marker.append("a")
+      .attr("xlink:href", function(d) { return '/foodmap/json/' + d.value.id});
 
-      // Add a label.
-      marker.append("svg:text")
-          .attr("x", padding + 7)
-          .attr("y", padding)
-          .attr("dy", ".31em")
-          //.text(function(d) { return d.value.name; });
-          debugger;
+    
 
-      function expandNode() {
-            d3.select(this).transition()
-                            .duration(100)
-                            .attr("r",7)
-          };
+  //   var legend = d3.select("#legend")
+  //   .data(color.domain())
+  // .enter().append("svg:g")
+  //   .attr("class", "legend");
+  //   // .attr("transform", function(d, i) { return "translate(0," + i * 20 + ")"; });
+
+  //  // draw legend colored rectangles
+  // legend.append("rect")
+  //     .attr("x", width - 18)
+  //     .attr("width", 18)
+  //     .attr("height", 18)
+  //     .style("fill", color);
+
+  // // draw legend text
+  // legend.append("text")
+  //     .attr("x", width - 24)
+  //     .attr("y", 9)
+  //     .attr("dy", ".35em")
+  //     .style("text-anchor", "end")
+  //     .text(function(d) { return d;});
+ 
+var fill = d3.scale.category20();
+
+  d3.layout.cloud().size([300, 300])
+      .words([
+        ".NET", "Silverlight", "jQuery", "CSS3", "HTML5", "JavaScript", "SQL","C#"].map(function(d) {
+        return {text: d, size: 10 + Math.random() * 50};
+      }))
+      .rotate(function() { return ~~(Math.random() * 2) * 90; })
+      .font("Impact")
+      .fontSize(function(d) { return d.size; })
+      .on("end", draw)
+      .start();
+
+  function draw(words) {
+    d3.select("#keywords").append("svg")
+        .attr("width", 300)
+        .attr("height", 300)
+      .append("g")
+        .attr("transform", "translate(150,150)")
+      .selectAll("text")
+        .data(words)
+      .enter().append("text")
+        .style("font-size", function(d) { return d.size + "px"; })
+        .style("font-family", "Impact")
+        .style("fill", function(d, i) { return fill(i); })
+        .attr("text-anchor", "middle")
+        .attr("transform", function(d) {
+          return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+        })
+        .text(function(d) { return d.text; });
+  }
+
       
 
 
@@ -135,7 +200,8 @@ d3.json("json", function(json) {
         d = projection.fromLatLngToDivPixel(d);
         return d3.select(this)
             .style("left", (d.x - padding) + "px")
-            .style("top", (d.y - padding) + "px")
+            .style("top", (d.y - padding) + "px");
+            
               
             
       }
