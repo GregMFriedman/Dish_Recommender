@@ -55,8 +55,24 @@ def showRestaurants():
 	return render_template('restaurant_map.html')
 
 @app.route('/foodmap/<biz_id>')
-def showMenu():
-	pass
+def showMenu(biz_id):
+	with open('../info_dict_clustered.pkl', 'r') as picklefile:
+		info_master = pickle.load(picklefile)
+
+	d = info_master[biz_id]
+	
+	
+	if 'cluster_words' in d:
+		keywords = d['cluster_words'][:10]
+	else:
+		keywords = ['hi']
+	pic = d['image_url']
+	name = d['name']
+	dishes = d['dish_scores']
+	
+
+	return render_template('menu3.html', dishes=dishes, keywords=keywords, pic=pic, name=name)
+
 
 @app.route('/dishmap/')
 def showDishes():
