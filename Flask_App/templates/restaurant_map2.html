@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+    <script type="text/javascript" src="https://mbostock.github.com/d3/d3.js?1.29.1"></script>
+    <script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+    <style type="text/css">
+
+html, body, #map {
+  width: 95%;
+  height: 95%;
+  margin: 0;
+  padding: 0;
+}
+
+
+.stations, .stations svg {
+  position: absolute;
+}
+
+.stations svg {
+  width: 60px;
+  height: 20px;
+  padding-right: 100px;
+  font: 10px sans-serif;
+}
+
+.stations circle {
+  fill: brown;
+  stroke: black;
+  stroke-width: 1.5px;
+}
+
+.tooltip {  
+    position: absolute;     
+    text-align: center;     
+    width: 60px;          
+    height: 60px;         
+    padding: 2px;       
+    font: 12px sans-serif;    
+    border: 0px;    
+    border-radius: 8px; 
+    
+  }
+.tooltip {
+  position: absolute;     
+  text-align: center;  
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 4px;
+}
+
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="dropdown">
+    <h3>Restaurant Groups</h3>
+    <select id='dropdown'>
+      <option value="0">Select Menu Items that You're Feeling</option>
+        {%for number, words in clusters.iteritems() %}
+          <option value= '{{number}}'>{{words}}</option>
+        {% endfor %}
+    </select>
+    
+</div>
+    <div id='keywords'></div>
+
+    <script type="text/javascript">
+
+
+var margin = {top: 20, right: 20, bottom: 30, left: 40},
+      width = 960 - margin.left - margin.right,
+      height = 500 - margin.top - margin.bottom;
+
+var cValue = function(d) { return d.value.category[0];},
+        color = d3.scale.category20();
+// Create the Google Map…
+var map = new google.maps.Map(d3.select("#map").node(), {
+  zoom: 14,
+  center: new google.maps.LatLng(40.73306, -73.96599345),
+  mapTypeId: google.maps.MapTypeId.TERRAIN
+});
+
+var menu = d3.select(".dropdown")
+    .on("change", change);
+
+
+// Load the station data. When the data comes back, create an overlay.
+function change() {
+
+  var sel = document.getElementById('dropdown'),
+  group = sel.options[sel.selectedIndex].value;
+
+  console.log(group);
+
+  d3.json("json", function(json) {
+  var data = d3.values(json)
+  var overlay = new google.maps.OverlayView();
+
+  // Add the container when the overlay is added to the map.
+  overlay.onAdd = function() {
+    //var layer = d3.select(this.getPanes().overlayLayer).append("div")
+        // .attr("class", "stations");
+    // var layer = d3.select(this.getPanes().overlayMouseTarget).append("div")
+    // .attr("class", "stations");
+
+    // Draw each marker as a separate SVG element.
+    // We could use a single SVG, but what size would it have?
+    overlay.draw = function() {
+      var projection = this.getProjection(),
+          padding = 10;
+
+      var layer = d3.select(this.getPanes().overlayMouseTarget).append("div")
+          .attr("class", "stations");
+
+
+      var marker = layer.selectAll("svg")
+          .data(d3.entries(data))
+          .each(transform) // update existing markers
+        .enter().append("svg:svg") 
+          .filter(function(d) { return d.value.cluster == group; })
+          .each(transform)
+          .attr("class", "marker");
+      
+      
+      var tooltip = d3.selectAll(".stations").append("div")
+        .data(d3.entries(data))
+        .each(transform) // update existing markers
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+
+      // Add a circle.
+      marker.append("svg:circle")
+          
+          .attr("r", function(d) { return Math.pow(d.value.rating - 2, 2); })
+          .attr("cx", padding)
+          .attr("cy", padding)
+          .attr('class', 'circle')
+          
+
+          .style("fill", function(d) { return color(cValue(d));})
+
+          .on("mouseover", function(d) {    
+            tooltip.transition()    
+                .duration(200)    
+                .style("opacity", .9);    
+            tooltip.html(d.value.name + "<br/>" +
+              '<a href= "/foodmap/'+d.value.id +'">'+'Best Dishes'+ "</a>" 
+              + "<br/>" + d.value.category[0])
+                .style("left", (d3.event.pageX) + "px")   
+                .style("top", (d3.event.pageY ) + "px");      
+            }); 
+
+      layer.selectAll('svg').select('.circle')
+        .data(d3.entries(data))
+        .each(transform)
+      .exit()
+        .each(function(d){d3.select(this);})
+        .transition()
+        .duration(500)
+        .style("opacity", 0)
+        .remove();
+
+
+
+        
+        debugger;
+      
+
+
+      function transform(d) {
+
+
+        d = new google.maps.LatLng(d.value.lat, d.value.long);
+        d = projection.fromLatLngToDivPixel(d);
+        
+
+        return d3.select(this)
+            .style("left", (d.x - padding) + "px")
+            .style("top", (d.y - padding) + "px");
+        
+              
+            
+      }
+    };
+  };
+
+  // Bind our overlay to the map…
+  overlay.setMap(map);
+});
+}
+
+    </script>
+  </body>
+</html>
