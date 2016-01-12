@@ -52,7 +52,22 @@ def dishes_json():
 
 @app.route('/foodmap/')
 def showRestaurants():
-	return render_template('restaurant_map.html')
+	with open('../info_dict_clustered.pkl', 'r') as picklefile:
+		info_master = pickle.load(picklefile)
+
+	clusters = {}
+
+	for biz_id, info in info_master.iteritems():
+
+		if 'cluster' in info:
+
+			name = info['cluster']
+			words = info['cluster_words'][:10]
+
+			clusters[name] = words
+
+
+	return render_template('restaurant_map.html', clusters=clusters)
 
 @app.route('/foodmap/<biz_id>')
 def showMenu(biz_id):
