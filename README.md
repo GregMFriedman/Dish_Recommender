@@ -29,5 +29,7 @@ For now, here are some screenshots:
 
 ![Display Restaurants](/images/DisplayingClusters.png)
 
+
+
 ![Dish Scores](/images/DispalyingDishes.png)
 
