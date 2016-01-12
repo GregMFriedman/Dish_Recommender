@@ -25,3 +25,9 @@ If you hover over a restaurant, you'll see the restaurant's name and a link to a
 which the user can sort by score or number of reviews.  
 
 I am working on getting that page up in the cloud.  Hopefully to come soon!
+For now, here are some screenshots:
+
+![Display Restaurants](/images/DisplayingClusters.png)
+
+![Dish Scores](/images/DispalyingDishes.png)
+
