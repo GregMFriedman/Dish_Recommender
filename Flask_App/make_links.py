@@ -63,6 +63,7 @@ def showRestaurants():
 
 			name = info['cluster']
 			words = info['cluster_words'][:10]
+			words = map(lambda x: str(x.capitalize()), words)
 
 			clusters[name] = words
 
@@ -84,9 +85,10 @@ def showMenu(biz_id):
 	pic = d['image_url']
 	name = d['name']
 	dishes = d['dish_scores']
+
 	
 
-	return render_template('menu3.html', dishes=dishes, keywords=keywords, pic=pic, name=name)
+	return render_template('menu.html', dishes=dishes, keywords=keywords, pic=pic, name=name)
 
 
 @app.route('/dishmap/')
