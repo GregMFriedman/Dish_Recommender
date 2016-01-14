@@ -1,46 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
-from flask_json import FlaskJSON, JsonError, json_response, as_json
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 import pickle
 import numpy as np
 import pandas as pd
-import cnfg
-from sqlalchemy import Column, ForeignKey, Integer, String
-import requests
-from requests_oauthlib import OAuth1
-import cnfg
-import time
-from random import randint
-import os
-import inspect, os
 import json
 
 
-app = Flask(__name__)
-
-config = cnfg.load(".psql_config")
-connection = config['connection']
-
-@app.route('/')
-@app.route('/restaurants/json/')
-def recs_json():
-	with open('/Users/gregoryfriedman/Dish_Recommender/recs_master.json', 'r') as f:
-		rec = f.read()
-		r = json.loads(rec)
-	return jsonify(r)
-
-
-@app.route('/restaurants/')
-def displayDishes():
-	return render_template('dishes.html')
-
-
-# @app.route('/restaurant/<restaurant_id>/menu/')
-# def showMenu(restaurant_id):
-#     restaurant = session.query(Restaurant).filter_by(Index=restaurant_id).one()
-#     items = session.query(Dish).filter_by(Restos_Index=restaurant_id).all()
-#     return render_template('menu2.html', items=items, restaurant=restaurant)
 
 @app.route('/')
 @app.route('/foodmap/json/')
