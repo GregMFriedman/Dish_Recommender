@@ -27,9 +27,11 @@ which the user can sort by score or number of reviews.
 I am working on getting that page up in the cloud.  Hopefully to come soon!
 For now, here are some screenshots:
 
+####Map Page:
+
 ![Display Restaurants](/images/DisplayingClusters.png)
 
-
+####Sample Restaurant Landing Page:
 
 ![Dish Scores](/images/DispalyingDishes.png)
 
